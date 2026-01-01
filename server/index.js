@@ -38,6 +38,18 @@ app.post("/hosts", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// =====================
+// ADMIN: LIST HOSTS
+// =====================
+app.get("/hosts", (req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, full_name, email FROM hosts WHERE is_active = 1 ORDER BY id DESC"
+    )
+    .all();
+
+  res.json(rows);
+});
 
 // =====================
 // KIOSK: VISITOR CHECK-IN
@@ -93,6 +105,100 @@ app.post("/visits/:id/checkout", (req, res) => {
 
   res.json({ success: true });
 });
+
+// =====================
+// ADMIN: VISIT HISTORY
+// =====================
+app.get("/visits/history", (req, res) => {
+  const rows = db.prepare(`
+    SELECT
+      visits.id,
+      visitors.full_name AS visitor_name,
+      visitors.company,
+      visitors.phone,
+      hosts.full_name AS host_name,
+      hosts.email AS host_email,
+      visits.purpose,
+      visits.check_in_at,
+      visits.check_out_at,
+      visits.qr_token
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    JOIN hosts ON hosts.id = visits.host_id
+    ORDER BY visits.id DESC
+    LIMIT 200
+  `).all();
+
+  res.json(rows);
+});
+
+// =====================
+// ADMIN: EXPORT CSV
+// =====================
+app.get("/visits/export.csv", (req, res) => {
+  const rows = db.prepare(`
+    SELECT
+      visits.id AS visit_id,
+      visitors.full_name AS visitor_name,
+      visitors.company,
+      visitors.phone,
+      hosts.full_name AS host_name,
+      hosts.email AS host_email,
+      visits.purpose,
+      visits.check_in_at,
+      visits.check_out_at,
+      visits.qr_token
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    JOIN hosts ON hosts.id = visits.host_id
+    ORDER BY visits.id DESC
+  `).all();
+
+  const header = [
+    "visit_id","visitor_name","company","phone",
+    "host_name","host_email","purpose",
+    "check_in_at","check_out_at","qr_token"
+  ];
+
+  const escape = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const lines = [header.join(",")].concat(
+    rows.map(r => header.map(h => escape(r[h])).join(","))
+  );
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", "attachment; filename=visitor_logs.csv");
+  res.send(lines.join("\n"));
+});
+
+// =====================
+// ADMIN: BASIC STATS
+// =====================
+app.get("/stats", (req, res) => {
+  const visitorsToday = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM visits
+    WHERE date(check_in_at) = date('now')
+  `).get().count;
+
+  const avgDurationMinutes = db.prepare(`
+    SELECT AVG((julianday(check_out_at) - julianday(check_in_at)) * 24 * 60) AS avg
+    FROM visits
+    WHERE check_out_at IS NOT NULL
+  `).get().avg;
+
+  res.json({
+    visitorsToday,
+    avgVisitDurationMinutes: avgDurationMinutes
+      ? Number(avgDurationMinutes.toFixed(1))
+      : 0
+  });
+});
+
 
 // =====================
 const PORT = 3001;

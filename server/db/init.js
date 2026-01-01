@@ -1,7 +1,9 @@
+const path = require("path");
 const Database = require("better-sqlite3");
 
-// create database file
-const db = new Database("visitor_kiosk.db");
+// ALWAYS create DB inside server/db
+const dbPath = path.join(__dirname, "visitor_kiosk.db");
+const db = new Database(dbPath);
 
 // create tables
 db.exec(`

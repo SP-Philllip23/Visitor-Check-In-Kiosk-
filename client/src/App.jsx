@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "./api";
+import Security from "./Security";
 
 export default function App() {
+  const [page, setPage] = useState("kiosk");
+
   const [hosts, setHosts] = useState([]);
   const [loadingHosts, setLoadingHosts] = useState(true);
 
@@ -72,59 +75,79 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: "40px auto", fontFamily: "Arial" }}>
-      <h1>Visitor Check-In Kiosk</h1>
+    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
+      {/* TABS */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <button onClick={() => setPage("kiosk")}>Kiosk</button>
+        <button onClick={() => setPage("security")}>Security</button>
+      </div>
 
-      {loadingHosts ? (
-        <p>Loading hosts...</p>
-      ) : (
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10 }}>
-          <input
-            placeholder="Full name *"
-            value={form.full_name}
-            onChange={(e) => updateField("full_name", e.target.value)}
-          />
-          <input
-            placeholder="Company"
-            value={form.company}
-            onChange={(e) => updateField("company", e.target.value)}
-          />
-          <input
-            placeholder="Phone"
-            value={form.phone}
-            onChange={(e) => updateField("phone", e.target.value)}
-          />
+      {/* SECURITY PAGE */}
+      {page === "security" && <Security />}
 
-          <select
-            value={form.host_id}
-            onChange={(e) => updateField("host_id", e.target.value)}
-          >
-            <option value="">Select host *</option>
-            {hosts.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.full_name} ({h.email})
-              </option>
-            ))}
-          </select>
+      {/* KIOSK PAGE */}
+      {page === "kiosk" && (
+        <>
+          <h1>Visitor Check-In Kiosk</h1>
 
-          <input
-            placeholder="Purpose * (e.g., Meeting)"
-            value={form.purpose}
-            onChange={(e) => updateField("purpose", e.target.value)}
-          />
+          {loadingHosts ? (
+            <p>Loading hosts...</p>
+          ) : (
+            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10 }}>
+              <input
+                placeholder="Full name *"
+                value={form.full_name}
+                onChange={(e) => updateField("full_name", e.target.value)}
+              />
+              <input
+                placeholder="Company"
+                value={form.company}
+                onChange={(e) => updateField("company", e.target.value)}
+              />
+              <input
+                placeholder="Phone"
+                value={form.phone}
+                onChange={(e) => updateField("phone", e.target.value)}
+              />
 
-          <button type="submit">Check In</button>
-        </form>
-      )}
+              <select
+                value={form.host_id}
+                onChange={(e) => updateField("host_id", e.target.value)}
+              >
+                <option value="">Select host *</option>
+                {hosts.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.full_name} ({h.email})
+                  </option>
+                ))}
+              </select>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+              <input
+                placeholder="Purpose * (e.g., Meeting)"
+                value={form.purpose}
+                onChange={(e) => updateField("purpose", e.target.value)}
+              />
 
-      {result?.qr_token && (
-        <div style={{ marginTop: 20, padding: 12, border: "1px solid #ccc" }}>
-          <h3>Check-in success ✅</h3>
-          <p>QR Token:</p>
-          <code>{result.qr_token}</code>
-        </div>
+              <button type="submit">Check In</button>
+            </form>
+          )}
+
+          {error && <p style={{ color: "red" }}>{error}</p>}
+
+          {result?.qr_token && (
+            <div
+              style={{
+                marginTop: 20,
+                padding: 12,
+                border: "1px solid #ccc",
+              }}
+            >
+              <h3>Check-in success ✅</h3>
+              <p>QR Token:</p>
+              <code>{result.qr_token}</code>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

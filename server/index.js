@@ -40,7 +40,7 @@ app.post("/hosts", (req, res) => {
 });
 
 // =====================
-// ADMIN: LIST HOSTS
+// ADMIN: LIST HOSTS (ACTIVE ONLY)  ✅ used by Kiosk dropdown
 // =====================
 app.get("/hosts", (req, res) => {
   const rows = db
@@ -49,6 +49,62 @@ app.get("/hosts", (req, res) => {
     )
     .all();
   res.json(rows);
+});
+
+// =====================
+// ADMIN: LIST HOSTS (ALL) ✅ used by Admin page
+// =====================
+app.get("/hosts/all", (req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, full_name, email, is_active, created_at FROM hosts ORDER BY id DESC"
+    )
+    .all();
+  res.json(rows);
+});
+
+// =====================
+// ADMIN: DISABLE HOST ✅
+// =====================
+app.post("/hosts/:id/disable", (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid host id" });
+
+  try {
+    const result = db
+      .prepare("UPDATE hosts SET is_active = 0 WHERE id = ?")
+      .run(id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Host not found" });
+    }
+
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =====================
+// ADMIN: ENABLE HOST (optional but useful) ✅
+// =====================
+app.post("/hosts/:id/enable", (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid host id" });
+
+  try {
+    const result = db
+      .prepare("UPDATE hosts SET is_active = 1 WHERE id = ?")
+      .run(id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Host not found" });
+    }
+
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =====================
@@ -85,12 +141,16 @@ app.post("/checkin", (req, res) => {
 // SECURITY: ACTIVE VISITORS
 // =====================
 app.get("/visits/active", (req, res) => {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT visits.id, visitors.full_name, visitors.company, visits.purpose, visits.check_in_at
     FROM visits
     JOIN visitors ON visitors.id = visits.visitor_id
     WHERE visits.check_out_at IS NULL
-  `).all();
+  `
+    )
+    .all();
 
   res.json(rows);
 });
@@ -110,7 +170,9 @@ app.post("/visits/:id/checkout", (req, res) => {
 // ADMIN: VISIT HISTORY
 // =====================
 app.get("/visits/history", (req, res) => {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       visits.id,
       visitors.full_name AS visitor_name,
@@ -127,7 +189,9 @@ app.get("/visits/history", (req, res) => {
     JOIN hosts ON hosts.id = visits.host_id
     ORDER BY visits.id DESC
     LIMIT 200
-  `).all();
+  `
+    )
+    .all();
 
   res.json(rows);
 });
@@ -136,7 +200,9 @@ app.get("/visits/history", (req, res) => {
 // ADMIN: EXPORT CSV
 // =====================
 app.get("/export/csv", (req, res) => {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       visits.id AS visit_id,
       visitors.full_name AS visitor_name,
@@ -152,7 +218,9 @@ app.get("/export/csv", (req, res) => {
     JOIN visitors ON visitors.id = visits.visitor_id
     JOIN hosts ON hosts.id = visits.host_id
     ORDER BY visits.id DESC
-  `).all();
+  `
+    )
+    .all();
 
   const header = [
     "visit_id",
@@ -176,10 +244,13 @@ app.get("/export/csv", (req, res) => {
   const csv =
     header.join(",") +
     "\n" +
-    rows.map(r => header.map(h => escape(r[h])).join(",")).join("\n");
+    rows.map((r) => header.map((h) => escape(r[h])).join(",")).join("\n");
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", 'attachment; filename="visitor_logs.csv"');
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="visitor_logs.csv"'
+  );
   res.send(csv);
 });
 
@@ -187,28 +258,34 @@ app.get("/export/csv", (req, res) => {
 // ADMIN: BASIC STATS
 // =====================
 app.get("/stats", (req, res) => {
-  const visitorsToday = db.prepare(`
+  const visitorsToday = db
+    .prepare(
+      `
     SELECT COUNT(*) AS count
     FROM visits
     WHERE date(check_in_at) = date('now')
-  `).get().count;
+  `
+    )
+    .get().count;
 
-  const avgDurationMinutes = db.prepare(`
+  const avgDurationMinutes = db
+    .prepare(
+      `
     SELECT AVG((julianday(check_out_at) - julianday(check_in_at)) * 24 * 60) AS avg
     FROM visits
     WHERE check_out_at IS NOT NULL
-  `).get().avg;
+  `
+    )
+    .get().avg;
 
   res.json({
     visitorsToday,
     avgVisitDurationMinutes: avgDurationMinutes
       ? Number(avgDurationMinutes.toFixed(1))
-      : 0
+      : 0,
   });
 });
 
 // =====================
 const PORT = 3001;
-app.listen(PORT, () =>
-  console.log(`API running at http://localhost:${PORT}`)
-);
+app.listen(PORT, () => console.log(`API running at http://localhost:${PORT}`));

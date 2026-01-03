@@ -42,9 +42,14 @@ export default function Security() {
     <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
       <h1>Security Dashboard</h1>
 
-      <button onClick={loadActive} style={{ marginBottom: 12 }}>
-        Refresh
-      </button>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <button onClick={loadActive}>Refresh</button>
+        <button
+          onClick={() => window.open(`${API_BASE}/export/csv`, "_blank")}
+        >
+          Download CSV
+        </button>
+      </div>
 
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}

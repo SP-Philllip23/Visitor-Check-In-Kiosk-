@@ -2,13 +2,13 @@ const express = require("express");
 const cors = require("cors");
 const Database = require("better-sqlite3");
 const crypto = require("crypto");
+const path = require("path");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // database connection
-const path = require("path");
 const db = new Database(path.join(__dirname, "db", "visitor_kiosk.db"));
 
 // =====================
@@ -38,6 +38,7 @@ app.post("/hosts", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // =====================
 // ADMIN: LIST HOSTS
 // =====================
@@ -47,7 +48,6 @@ app.get("/hosts", (req, res) => {
       "SELECT id, full_name, email FROM hosts WHERE is_active = 1 ORDER BY id DESC"
     )
     .all();
-
   res.json(rows);
 });
 
@@ -135,7 +135,7 @@ app.get("/visits/history", (req, res) => {
 // =====================
 // ADMIN: EXPORT CSV
 // =====================
-app.get("/visits/export.csv", (req, res) => {
+app.get("/export/csv", (req, res) => {
   const rows = db.prepare(`
     SELECT
       visits.id AS visit_id,
@@ -155,9 +155,16 @@ app.get("/visits/export.csv", (req, res) => {
   `).all();
 
   const header = [
-    "visit_id","visitor_name","company","phone",
-    "host_name","host_email","purpose",
-    "check_in_at","check_out_at","qr_token"
+    "visit_id",
+    "visitor_name",
+    "company",
+    "phone",
+    "host_name",
+    "host_email",
+    "purpose",
+    "check_in_at",
+    "check_out_at",
+    "qr_token",
   ];
 
   const escape = (v) => {
@@ -166,13 +173,14 @@ app.get("/visits/export.csv", (req, res) => {
     return `"${s}"`;
   };
 
-  const lines = [header.join(",")].concat(
-    rows.map(r => header.map(h => escape(r[h])).join(","))
-  );
+  const csv =
+    header.join(",") +
+    "\n" +
+    rows.map(r => header.map(h => escape(r[h])).join(",")).join("\n");
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", "attachment; filename=visitor_logs.csv");
-  res.send(lines.join("\n"));
+  res.setHeader("Content-Disposition", 'attachment; filename="visitor_logs.csv"');
+  res.send(csv);
 });
 
 // =====================
@@ -198,7 +206,6 @@ app.get("/stats", (req, res) => {
       : 0
   });
 });
-
 
 // =====================
 const PORT = 3001;

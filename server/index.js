@@ -1,5 +1,3 @@
-// server/index.js
-
 const express = require("express");
 const cors = require("cors");
 const Database = require("better-sqlite3");
@@ -10,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// database connection (same DB used by init.js)
+// database connection
 const db = new Database(path.join(__dirname, "db", "visitor_kiosk.db"));
 
 // =====================
@@ -31,60 +29,45 @@ app.post("/hosts", (req, res) => {
   }
 
   try {
-    const stmt = db.prepare(
-      "INSERT INTO hosts (full_name, email) VALUES (?, ?)"
-    );
+    const stmt = db.prepare("INSERT INTO hosts (full_name, email) VALUES (?, ?)");
     const result = stmt.run(full_name, email);
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
-    // common error: UNIQUE constraint failed: hosts.email
     res.status(500).json({ error: err.message });
   }
 });
 
 // =====================
-// ADMIN: LIST ACTIVE HOSTS (for Kiosk dropdown)
+// ADMIN: LIST HOSTS (ACTIVE ONLY) ✅ used by Kiosk dropdown
 // =====================
 app.get("/hosts", (req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        "SELECT id, full_name, email FROM hosts WHERE is_active = 1 ORDER BY id DESC"
-      )
-      .all();
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const rows = db
+    .prepare("SELECT id, full_name, email FROM hosts WHERE is_active = 1 ORDER BY id DESC")
+    .all();
+  res.json(rows);
 });
 
 // =====================
-// ADMIN: LIST ALL HOSTS (for Admin page)
+// ADMIN: LIST HOSTS (ALL) ✅ used by Admin page
 // =====================
 app.get("/hosts/all", (req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        "SELECT id, full_name, email, is_active, created_at FROM hosts ORDER BY id DESC"
-      )
-      .all();
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const rows = db
+    .prepare("SELECT id, full_name, email, is_active, created_at FROM hosts ORDER BY id DESC")
+    .all();
+  res.json(rows);
 });
 
 // =====================
-// ADMIN: DISABLE HOST
+// ADMIN: DISABLE HOST ✅
 // =====================
 app.post("/hosts/:id/disable", (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const info = db
-      .prepare("UPDATE hosts SET is_active = 0 WHERE id = ?")
-      .run(id);
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid host id" });
 
-    if (info.changes === 0) {
+  try {
+    const result = db.prepare("UPDATE hosts SET is_active = 0 WHERE id = ?").run(id);
+
+    if (result.changes === 0) {
       return res.status(404).json({ error: "Host not found" });
     }
 
@@ -95,16 +78,16 @@ app.post("/hosts/:id/disable", (req, res) => {
 });
 
 // =====================
-// ADMIN: ENABLE HOST
+// ADMIN: ENABLE HOST ✅
 // =====================
 app.post("/hosts/:id/enable", (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const info = db
-      .prepare("UPDATE hosts SET is_active = 1 WHERE id = ?")
-      .run(id);
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid host id" });
 
-    if (info.changes === 0) {
+  try {
+    const result = db.prepare("UPDATE hosts SET is_active = 1 WHERE id = ?").run(id);
+
+    if (result.changes === 0) {
       return res.status(404).json({ error: "Host not found" });
     }
 
@@ -136,7 +119,7 @@ app.post("/checkin", (req, res) => {
       `INSERT INTO visits (visitor_id, host_id, purpose, qr_token)
        VALUES (?, ?, ?, ?)`
     );
-    visitStmt.run(visitor.lastInsertRowid, Number(host_id), purpose, qr_token);
+    visitStmt.run(visitor.lastInsertRowid, host_id, purpose, qr_token);
 
     res.json({ success: true, qr_token });
   } catch (err) {
@@ -148,238 +131,187 @@ app.post("/checkin", (req, res) => {
 // SECURITY: ACTIVE VISITORS
 // =====================
 app.get("/visits/active", (req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT
-          visits.id,
-          visitors.full_name,
-          visitors.company,
-          visits.purpose,
-          visits.check_in_at,
-          visits.qr_token
-        FROM visits
-        JOIN visitors ON visitors.id = visits.visitor_id
-        WHERE visits.check_out_at IS NULL
-        ORDER BY visits.id DESC
+  const rows = db
+    .prepare(
       `
-      )
-      .all();
+    SELECT visits.id, visitors.full_name, visitors.company, visits.purpose, visits.check_in_at
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    WHERE visits.check_out_at IS NULL
+  `
+    )
+    .all();
 
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =====================
-// ✅ STEP A1: SECURITY: VERIFY QR TOKEN
-// Goal: Security pastes/scans token -> get visit info + status
-// =====================
-app.get("/visits/verify/:token", (req, res) => {
-  const token = req.params.token;
-
-  if (!token) {
-    return res.status(400).json({ error: "qr_token required" });
-  }
-
-  try {
-    const row = db
-      .prepare(
-        `
-        SELECT
-          visits.id AS visit_id,
-          visitors.full_name AS visitor_name,
-          visitors.company AS company,
-          visitors.phone AS phone,
-          hosts.full_name AS host_name,
-          hosts.email AS host_email,
-          visits.purpose AS purpose,
-          visits.check_in_at AS check_in_at,
-          visits.check_out_at AS check_out_at,
-          visits.qr_token AS qr_token,
-          CASE
-            WHEN visits.check_out_at IS NULL THEN 'ACTIVE'
-            ELSE 'CHECKED_OUT'
-          END AS status
-        FROM visits
-        JOIN visitors ON visitors.id = visits.visitor_id
-        JOIN hosts ON hosts.id = visits.host_id
-        WHERE visits.qr_token = ?
-        ORDER BY visits.id DESC
-        LIMIT 1
-      `
-      )
-      .get(token);
-
-    if (!row) {
-      return res.status(404).json({ error: "Invalid token (visit not found)" });
-    }
-
-    res.json(row);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json(rows);
 });
 
 // =====================
 // SECURITY: CHECK-OUT
 // =====================
 app.post("/visits/:id/checkout", (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const info = db
-      .prepare(
-        "UPDATE visits SET check_out_at = CURRENT_TIMESTAMP WHERE id = ?"
-      )
-      .run(id);
-
-    if (info.changes === 0) {
-      return res.status(404).json({ error: "Visit not found" });
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  db.prepare("UPDATE visits SET check_out_at = CURRENT_TIMESTAMP WHERE id = ?").run(
+    req.params.id
+  );
+  res.json({ success: true });
 });
 
 // =====================
-// REPORTS: VISIT HISTORY
+// SECURITY: VERIFY QR TOKEN ✅
+// =====================
+app.get("/visits/verify/:token", (req, res) => {
+  const token = req.params.token;
+
+  const row = db
+    .prepare(
+      `
+    SELECT
+      visits.id AS visit_id,
+      visitors.full_name AS visitor_name,
+      visitors.company,
+      visitors.phone,
+      hosts.full_name AS host_name,
+      hosts.email AS host_email,
+      visits.purpose,
+      visits.check_in_at,
+      visits.check_out_at,
+      visits.qr_token
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    JOIN hosts ON hosts.id = visits.host_id
+    WHERE visits.qr_token = ?
+    LIMIT 1
+  `
+    )
+    .get(token);
+
+  if (!row) return res.status(404).json({ error: "Token not found" });
+
+  const status = row.check_out_at ? "CHECKED_OUT" : "ACTIVE";
+
+  res.json({
+    ...row,
+    status,
+  });
+});
+
+// =====================
+// ADMIN: VISIT HISTORY
 // =====================
 app.get("/visits/history", (req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT
-          visits.id AS id,
-          visitors.full_name AS visitor_name,
-          visitors.company AS company,
-          visitors.phone AS phone,
-          hosts.full_name AS host_name,
-          hosts.email AS host_email,
-          visits.purpose AS purpose,
-          visits.check_in_at AS check_in_at,
-          visits.check_out_at AS check_out_at,
-          visits.qr_token AS qr_token
-        FROM visits
-        JOIN visitors ON visitors.id = visits.visitor_id
-        JOIN hosts ON hosts.id = visits.host_id
-        ORDER BY visits.id DESC
+  const rows = db
+    .prepare(
       `
-      )
-      .all();
+    SELECT
+      visits.id,
+      visitors.full_name AS visitor_name,
+      visitors.company,
+      visitors.phone,
+      hosts.full_name AS host_name,
+      hosts.email AS host_email,
+      visits.purpose,
+      visits.check_in_at,
+      visits.check_out_at,
+      visits.qr_token
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    JOIN hosts ON hosts.id = visits.host_id
+    ORDER BY visits.id DESC
+    LIMIT 200
+  `
+    )
+    .all();
 
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json(rows);
 });
 
 // =====================
-// DASHBOARD: STATS
+// ADMIN: EXPORT CSV (ONE handler, MANY routes) ✅ FIX
 // =====================
-app.get("/stats", (req, res) => {
-  try {
-    const visitorsTodayRow = db
-      .prepare(
-        `
-        SELECT COUNT(*) AS count
-        FROM visits
-        WHERE DATE(check_in_at) = DATE('now')
+function exportCsvHandler(req, res) {
+  const rows = db
+    .prepare(
       `
-      )
-      .get();
+    SELECT
+      visits.id AS visit_id,
+      visitors.full_name AS visitor_name,
+      visitors.company,
+      visitors.phone,
+      hosts.full_name AS host_name,
+      hosts.email AS host_email,
+      visits.purpose,
+      visits.check_in_at,
+      visits.check_out_at,
+      visits.qr_token
+    FROM visits
+    JOIN visitors ON visitors.id = visits.visitor_id
+    JOIN hosts ON hosts.id = visits.host_id
+    ORDER BY visits.id DESC
+  `
+    )
+    .all();
 
-    const avgRow = db
-      .prepare(
-        `
-        SELECT AVG(
-          (julianday(COALESCE(check_out_at, CURRENT_TIMESTAMP)) - julianday(check_in_at)) * 24 * 60
-        ) AS avg_minutes
-        FROM visits
-        WHERE DATE(check_in_at) = DATE('now')
-      `
-      )
-      .get();
+  const header = [
+    "visit_id",
+    "visitor_name",
+    "company",
+    "phone",
+    "host_name",
+    "host_email",
+    "purpose",
+    "check_in_at",
+    "check_out_at",
+    "qr_token",
+  ];
 
-    res.json({
-      visitorsToday: visitorsTodayRow?.count || 0,
-      avgVisitDurationMinutes: Number((avgRow?.avg_minutes || 0).toFixed(1)),
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+  const escape = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v).replace(/"/g, '""');
+    return `"${s}"`;
+  };
 
-// =====================
-// EXPORT: CSV
-// =====================
-function csvEscape(value) {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+  const csv =
+    header.join(",") +
+    "\n" +
+    rows.map((r) => header.map((h) => escape(r[h])).join(",")).join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="visitor_logs.csv"');
+  res.send(csv);
 }
 
-app.get("/export/csv", (req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT
-          visits.id AS visit_id,
-          visitors.full_name AS visitor_name,
-          visitors.company AS company,
-          visitors.phone AS phone,
-          hosts.full_name AS host_name,
-          hosts.email AS host_email,
-          visits.purpose AS purpose,
-          visits.check_in_at AS check_in_at,
-          visits.check_out_at AS check_out_at,
-          visits.qr_token AS qr_token
-        FROM visits
-        JOIN visitors ON visitors.id = visits.visitor_id
-        JOIN hosts ON hosts.id = visits.host_id
-        ORDER BY visits.id DESC
+// Support ALL of these (so frontend never breaks):
+app.get("/export/csv", exportCsvHandler);
+app.get("/visits/export.csv", exportCsvHandler);
+app.get("/visits/export", exportCsvHandler);
+
+// =====================
+// ADMIN: BASIC STATS
+// =====================
+app.get("/stats", (req, res) => {
+  const visitorsToday = db
+    .prepare(
       `
-      )
-      .all();
+    SELECT COUNT(*) AS count
+    FROM visits
+    WHERE date(check_in_at) = date('now')
+  `
+    )
+    .get().count;
 
-    const headers = [
-      "visit_id",
-      "visitor_name",
-      "company",
-      "phone",
-      "host_name",
-      "host_email",
-      "purpose",
-      "check_in_at",
-      "check_out_at",
-      "qr_token",
-    ];
+  const avgDurationMinutes = db
+    .prepare(
+      `
+    SELECT AVG((julianday(check_out_at) - julianday(check_in_at)) * 24 * 60) AS avg
+    FROM visits
+    WHERE check_out_at IS NOT NULL
+  `
+    )
+    .get().avg;
 
-    const lines = [];
-    lines.push(headers.join(","));
-
-    for (const r of rows) {
-      lines.push(
-        headers.map((h) => csvEscape(r[h])).join(",")
-      );
-    }
-
-    const csv = lines.join("\n");
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=visitor_logs.csv");
-    res.send(csv);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({
+    visitorsToday,
+    avgVisitDurationMinutes: avgDurationMinutes ? Number(avgDurationMinutes.toFixed(1)) : 0,
+  });
 });
 
 // =====================

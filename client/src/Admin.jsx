@@ -15,7 +15,6 @@ export default function Admin() {
     setError("");
     setLoading(true);
     try {
-      // IMPORTANT: Admin must load ALL hosts
       const res = await fetch(`${API_BASE}/hosts/all`);
       const data = await res.json();
       setHosts(data);
@@ -64,12 +63,9 @@ export default function Admin() {
     if (!confirm("Disable this host?")) return;
 
     try {
-      const res = await fetch(`${API_BASE}/hosts/${id}/disable`, {
-        method: "POST",
-      });
+      const res = await fetch(`${API_BASE}/hosts/${id}/disable`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Disable failed");
-
       loadHosts();
     } catch (e) {
       alert(e.message);
@@ -80,12 +76,9 @@ export default function Admin() {
     if (!confirm("Enable this host?")) return;
 
     try {
-      const res = await fetch(`${API_BASE}/hosts/${id}/enable`, {
-        method: "POST",
-      });
+      const res = await fetch(`${API_BASE}/hosts/${id}/enable`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Enable failed");
-
       loadHosts();
     } catch (e) {
       alert(e.message);
@@ -93,74 +86,114 @@ export default function Admin() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
-      <h1>Admin - Host Management</h1>
+    <div className="container" style={{ padding: 0 }}>
+      <h1 className="pageTitle">Admin Dashboard</h1>
+      <p className="pageDesc">
+        Manage hosts (add, enable/disable). Disabled hosts remain in the system but will not appear in the Kiosk host dropdown.
+      </p>
 
-      <form
-        onSubmit={addHost}
-        style={{ display: "grid", gap: 10, maxWidth: 420 }}
-      >
-        <input
-          placeholder="Full name *"
-          value={form.full_name}
-          onChange={(e) => updateField("full_name", e.target.value)}
-        />
-        <input
-          placeholder="Email *"
-          value={form.email}
-          onChange={(e) => updateField("email", e.target.value)}
-        />
-        <button type="submit">Add Host</button>
-      </form>
+      <div className="grid2">
+        <div className="card">
+          <div className="cardTitle">Add Host</div>
+          <div className="cardHint">
+            Create a new host record (default: ACTIVE).
+          </div>
 
-      {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
+          <form onSubmit={addHost} className="formGrid">
+            <input
+              className="input"
+              placeholder="Full name *"
+              value={form.full_name}
+              onChange={(e) => updateField("full_name", e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Email *"
+              value={form.email}
+              onChange={(e) => updateField("email", e.target.value)}
+            />
 
-      <hr style={{ margin: "24px 0" }} />
+            <div className="actions" style={{ gridColumn: "1 / -1" }}>
+              <button className="btn primary block" type="submit">
+                Add Host
+              </button>
+            </div>
+          </form>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <h2 style={{ margin: 0 }}>All Hosts</h2>
-        <button onClick={loadHosts}>Refresh</button>
+          {error && <div className="noteError">{error}</div>}
+        </div>
+
+        <div className="card">
+          <div className="cardTitle">Tip</div>
+          <p className="cardHint">
+            Keeping disabled hosts visible helps auditing and prevents data loss.
+            Use Enable/Disable to control availability without deleting records.
+          </p>
+          <div className="small">
+            Kiosk uses <code>GET /hosts</code> (active only). Admin uses <code>GET /hosts/all</code>.
+          </div>
+
+          <div className="actions" style={{ marginTop: 12 }}>
+            <button className="btn" onClick={loadHosts}>Refresh</button>
+          </div>
+        </div>
       </div>
 
-      {loading && <p>Loading...</p>}
-      {!loading && hosts.length === 0 && <p>No hosts yet.</p>}
+      <div style={{ height: 14 }} />
 
-      {hosts.length > 0 && (
-        <table border="1" cellPadding="8" style={{ width: "100%", marginTop: 10 }}>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Full Name</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
+      <div className="card">
+        <div className="splitRow">
+          <div className="cardTitle" style={{ margin: 0 }}>All Hosts</div>
+          <div className="cardHint" style={{ margin: 0 }}>
+            {loading ? "Loading..." : `${hosts.length} total`}
+          </div>
+        </div>
 
-          <tbody>
-            {hosts.map((h) => (
-              <tr key={h.id}>
-                <td>{h.id}</td>
-                <td>{h.full_name}</td>
-                <td>{h.email}</td>
-                <td>{h.is_active === 1 ? "ACTIVE" : "DISABLED"}</td>
-                <td>
-                  {h.is_active === 1 ? (
-                    <button onClick={() => disableHost(h.id)}>Disable</button>
-                  ) : (
-                    <button onClick={() => enableHost(h.id)}>Enable</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        {!loading && hosts.length === 0 && <p className="cardHint">No hosts yet.</p>}
 
-      <p style={{ marginTop: 12, opacity: 0.8 }}>
-        ✅ Disabled hosts will disappear from the Kiosk “Select host” dropdown (because Kiosk uses
-        <code> GET /hosts</code> = active only).
-      </p>
+        {hosts.length > 0 && (
+          <div className="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Full Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hosts.map((h) => (
+                  <tr key={h.id}>
+                    <td>{h.id}</td>
+                    <td>{h.full_name}</td>
+                    <td>{h.email}</td>
+                    <td>
+                      {h.is_active ? (
+                        <span className="badge good">ACTIVE</span>
+                      ) : (
+                        <span className="badge bad">DISABLED</span>
+                      )}
+                    </td>
+                    <td>
+                      {h.is_active ? (
+                        <button className="btn bad" onClick={() => disableHost(h.id)}>
+                          Disable
+                        </button>
+                      ) : (
+                        <button className="btn good" onClick={() => enableHost(h.id)}>
+                          Enable
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

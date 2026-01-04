@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "./api";
-import QrScanner from "qr-scanner";
-
-// IMPORTANT for Vite: point to worker file
-QrScanner.WORKER_PATH = new URL(
-  "qr-scanner/qr-scanner-worker.min.js",
-  import.meta.url
-).toString();
 
 export default function Security() {
-  // ======================
-  // ACTIVE VISITS TABLE
-  // ======================
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Verify box
+  const [token, setToken] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [verifyResult, setVerifyResult] = useState(null);
+
+  const fileInputRef = useRef(null);
 
   async function loadActive() {
     setError("");
@@ -43,17 +41,20 @@ export default function Security() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");
       loadActive();
+
+      // If the verified visit is the same one, refresh verify result too
+      if (verifyResult?.visit_id === id) {
+        await verifyToken(token);
+      }
     } catch (e) {
       alert(e.message);
     }
   }
 
-  // ======================
-  // CSV DOWNLOAD
-  // ======================
   async function downloadCSV() {
     try {
-      const res = await fetch(`${API_BASE}/visits/export`);
+      // your server supports these paths; this one is fine:
+      const res = await fetch(`${API_BASE}/visits/export.csv`);
       if (!res.ok) throw new Error("CSV export failed");
 
       const blob = await res.blob();
@@ -72,225 +73,181 @@ export default function Security() {
     }
   }
 
-  // ======================
-  // VERIFY TOKEN (API)
-  // ======================
-  const [tokenInput, setTokenInput] = useState("");
-  const [verifyResult, setVerifyResult] = useState(null);
-  const [verifyError, setVerifyError] = useState("");
-  const [verifying, setVerifying] = useState(false);
-
-  async function verifyToken(token) {
-    const clean = (token || "").trim();
+  async function verifyToken(t) {
+    const clean = String(t || "").trim();
     if (!clean) {
       setVerifyError("Please paste a token first.");
-      setVerifyResult(null);
       return;
     }
 
-    setVerifying(true);
+    setVerifyLoading(true);
     setVerifyError("");
     setVerifyResult(null);
 
     try {
       const res = await fetch(`${API_BASE}/visits/verify/${encodeURIComponent(clean)}`);
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || "Token not found");
+
       setVerifyResult(data);
     } catch (e) {
       setVerifyError(e.message);
     } finally {
-      setVerifying(false);
+      setVerifyLoading(false);
     }
   }
 
   function clearVerify() {
-    setTokenInput("");
-    setVerifyResult(null);
+    setToken("");
     setVerifyError("");
+    setVerifyResult(null);
   }
 
-  async function checkoutVerifiedVisit() {
-    if (!verifyResult?.visit_id) return;
-    if (verifyResult.status !== "ACTIVE") return;
-
-    if (!confirm("Check out this visit?")) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/visits/${verifyResult.visit_id}/checkout`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Checkout failed");
-
-      // refresh both areas
-      await verifyToken(verifyResult.qr_token);
-      loadActive();
-    } catch (e) {
-      alert(e.message);
-    }
-  }
-
-  // ======================
-  // UPLOAD QR IMAGE (NO CAMERA)
-  // ======================
-  const fileInputRef = useRef(null);
-
-  async function handleUploadImage(e) {
-    const file = e.target.files?.[0];
+  async function readQrFromImageFile(file) {
+    // Uses BarcodeDetector (Chrome supports QR). No external library needed.
     if (!file) return;
 
-    setVerifyError("");
-    setVerifyResult(null);
-
     try {
-      // scanImage can read File directly
-      const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true });
-      const scannedText = (result?.data || "").trim();
+      if (!("BarcodeDetector" in window)) {
+        alert("QR image scan needs Chrome (BarcodeDetector not supported in this browser).");
+        return;
+      }
 
-      if (!scannedText) throw new Error("QR not detected. Try a clearer image.");
+      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
 
-      setTokenInput(scannedText);
-      await verifyToken(scannedText);
-    } catch (err) {
-      setVerifyError(err?.message || "Failed to read QR from image.");
-    } finally {
-      // allow uploading the same file again
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      // createImageBitmap is supported in modern browsers
+      const bitmap = await createImageBitmap(file);
+      const codes = await detector.detect(bitmap);
+
+      if (!codes || codes.length === 0) {
+        alert("No QR code found in this image. Try a clearer screenshot.");
+        return;
+      }
+
+      const value = codes[0]?.rawValue || "";
+      if (!value) {
+        alert("QR code detected but token is empty.");
+        return;
+      }
+
+      setToken(value);
+      await verifyToken(value);
+    } catch (e) {
+      alert("Failed to read QR from image. Try a clearer image.");
     }
   }
 
-  // ======================
-  // UI
-  // ======================
   return (
-    <div style={{ maxWidth: 1100, margin: "40px auto", fontFamily: "Arial" }}>
-      <h1>Security Dashboard</h1>
+    <div className="container">
+      <div className="pageTitleRow">
+        <div>
+          <h1 className="pageTitle">Security Dashboard</h1>
+          <p className="muted">
+            Monitor active visitors, verify QR tokens, check out visits, and export logs.
+          </p>
+        </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        <button onClick={loadActive}>Refresh</button>
-        <button onClick={downloadCSV}>Download CSV</button>
+        <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+          <button className="btn" onClick={loadActive}>
+            Refresh
+          </button>
+          <button className="btn" onClick={downloadCSV}>
+            Download CSV
+          </button>
+        </div>
       </div>
 
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {/* VERIFY QR TOKEN */}
-      <div
-        style={{
-          marginTop: 18,
-          padding: 16,
-          border: "1px solid #444",
-          borderRadius: 10,
-        }}
-      >
+      {/* VERIFY */}
+      <div className="card" style={{ marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Verify QR Token</h2>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="row" style={{ gap: 10, alignItems: "center" }}>
           <input
-            style={{ flex: "1 1 420px", minWidth: 280 }}
+            className="input"
             placeholder="Paste QR token here..."
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            style={{ flex: 1 }}
           />
 
-          <button onClick={() => verifyToken(tokenInput)} disabled={verifying}>
-            {verifying ? "Verifying..." : "Verify"}
+          <button className="btn" onClick={() => verifyToken(token)} disabled={verifyLoading}>
+            {verifyLoading ? "Verifying..." : "Verify"}
           </button>
 
-          <button onClick={clearVerify}>Clear</button>
-
-          {/* UPLOAD IMAGE BUTTON */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            title="Upload a QR image (PNG/JPG) and auto-read it"
-          >
-            Upload QR Image
+          <button className="btn btnGhost" onClick={clearVerify}>
+            Clear
           </button>
+        </div>
 
+        <div className="row" style={{ marginTop: 10 }}>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            onChange={handleUploadImage}
             style={{ display: "none" }}
+            onChange={(e) => readQrFromImageFile(e.target.files?.[0])}
           />
+          <button className="btn btnGhost" onClick={() => fileInputRef.current?.click()}>
+            Upload QR Image
+          </button>
+          <span className="muted" style={{ marginLeft: 10 }}>
+            Tip: upload a screenshot/photo of the QR from Kiosk.
+          </span>
         </div>
 
-        {verifyError && <p style={{ color: "red", marginTop: 12 }}>{verifyError}</p>}
+        {verifyError && <p style={{ color: "#ff6b6b", marginTop: 10 }}>{verifyError}</p>}
 
         {verifyResult && (
-          <div
-            style={{
-              marginTop: 14,
-              padding: 14,
-              border: "1px solid #555",
-              borderRadius: 10,
-            }}
-          >
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <div>
-                <b>Result:</b>{" "}
-                <span
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    border: "1px solid #666",
-                    marginLeft: 8,
-                  }}
-                >
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                <b>Result:</b>
+                <span className="pill">
                   Status: {verifyResult.status}
                 </span>
-                <span style={{ marginLeft: 16 }}>
-                  <b>Visit ID:</b> {verifyResult.visit_id}
-                </span>
+                <span className="muted">Visit ID: {verifyResult.visit_id}</span>
               </div>
             </div>
 
-            <div style={{ marginTop: 12, lineHeight: 1.8 }}>
-              <div>
-                <b>Visitor:</b> {verifyResult.visitor_name}
-                {verifyResult.company ? ` (${verifyResult.company})` : ""}
-              </div>
-              <div>
-                <b>Phone:</b> {verifyResult.phone || "-"}
-              </div>
-              <div>
-                <b>Host:</b> {verifyResult.host_name} ({verifyResult.host_email})
-              </div>
-              <div>
-                <b>Purpose:</b> {verifyResult.purpose}
-              </div>
-              <div>
-                <b>Check-in:</b> {verifyResult.check_in_at}
-              </div>
-              <div>
-                <b>Check-out:</b> {verifyResult.check_out_at || "-"}
-              </div>
-              <div>
-                <b>Token:</b> <code>{verifyResult.qr_token}</code>
-              </div>
+            <div style={{ marginTop: 12, lineHeight: 1.9 }}>
+              <div><b>Visitor:</b> {verifyResult.visitor_name} {verifyResult.company ? `(${verifyResult.company})` : ""}</div>
+              <div><b>Phone:</b> {verifyResult.phone || "-"}</div>
+              <div><b>Host:</b> {verifyResult.host_name} ({verifyResult.host_email})</div>
+              <div><b>Purpose:</b> {verifyResult.purpose}</div>
+              <div><b>Check-in:</b> {verifyResult.check_in_at}</div>
+              <div><b>Check-out:</b> {verifyResult.check_out_at || "-"}</div>
+              <div className="muted"><b>Token:</b> {verifyResult.qr_token}</div>
             </div>
 
-            <div style={{ marginTop: 14 }}>
-              {verifyResult.status === "ACTIVE" ? (
-                <button onClick={checkoutVerifiedVisit}>Check Out This Visit</button>
-              ) : (
-                <span style={{ opacity: 0.8 }}>Already checked out ✅</span>
-              )}
-            </div>
+            {verifyResult.status === "ACTIVE" ? (
+              <button
+                className="btn"
+                style={{ marginTop: 12 }}
+                onClick={() => checkout(verifyResult.visit_id)}
+              >
+                Check Out This Visit
+              </button>
+            ) : (
+              <div className="row" style={{ marginTop: 12, gap: 8 }}>
+                <span className="muted">Already checked out</span>
+                <span>✅</span>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* ACTIVE VISITS TABLE */}
-      <div style={{ marginTop: 22 }}>
-        {!loading && rows.length === 0 && <p>No active visitors.</p>}
+      {/* ACTIVE VISITS */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <h2 style={{ marginTop: 0 }}>Active Visitors</h2>
+
+        {loading && <p>Loading...</p>}
+        {error && <p style={{ color: "#ff6b6b" }}>{error}</p>}
+
+        {!loading && rows.length === 0 && <p className="muted">No active visitors.</p>}
 
         {rows.length > 0 && (
-          <table border="1" cellPadding="8" style={{ width: "100%" }}>
+          <table className="table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -298,7 +255,7 @@ export default function Security() {
                 <th>Company</th>
                 <th>Purpose</th>
                 <th>Check-in</th>
-                <th>Action</th>
+                <th style={{ width: 130 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -310,7 +267,9 @@ export default function Security() {
                   <td>{r.purpose}</td>
                   <td>{r.check_in_at}</td>
                   <td>
-                    <button onClick={() => checkout(r.id)}>Check Out</button>
+                    <button className="btn" onClick={() => checkout(r.id)}>
+                      Check Out
+                    </button>
                   </td>
                 </tr>
               ))}

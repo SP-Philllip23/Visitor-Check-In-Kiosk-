@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { API_BASE } from "./api";
 import Security from "./Security";
 import Admin from "./Admin";
+
+// If you use qrcode.react, use this import style:
+// npm i qrcode.react
 import { QRCodeCanvas } from "qrcode.react";
 
 export default function App() {
@@ -23,6 +26,8 @@ export default function App() {
 
   async function loadHosts() {
     setError("");
+    setLoadingHosts(true);
+
     try {
       const res = await fetch(`${API_BASE}/hosts`);
       const data = await res.json();
@@ -66,8 +71,6 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || "Check-in failed");
 
       setResult(data);
-
-      // Reset form after success
       setForm({
         full_name: "",
         company: "",
@@ -76,123 +79,149 @@ export default function App() {
         purpose: "",
       });
 
-      // Reload hosts (in case admin disabled a host)
-      setLoadingHosts(true);
-      await loadHosts();
+      // reload hosts in case admin disabled/enabled someone
+      loadHosts();
     } catch (e) {
       setError(e.message);
     }
   }
 
-  function copyToken() {
+  async function copyToken() {
     if (!result?.qr_token) return;
-    navigator.clipboard.writeText(result.qr_token);
-    alert("QR token copied!");
+    try {
+      await navigator.clipboard.writeText(result.qr_token);
+      alert("Token copied!");
+    } catch {
+      alert("Copy failed. Please copy manually.");
+    }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
-      {/* TABS */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-        <button onClick={() => setPage("kiosk")}>Kiosk</button>
-        <button onClick={() => setPage("security")}>Security</button>
-        <button onClick={() => setPage("admin")}>Admin</button>
+    <div className="appShell">
+      <div className="topNav">
+        <button className={`tab ${page === "kiosk" ? "active" : ""}`} onClick={() => setPage("kiosk")}>
+          Kiosk
+        </button>
+        <button className={`tab ${page === "security" ? "active" : ""}`} onClick={() => setPage("security")}>
+          Security
+        </button>
+        <button className={`tab ${page === "admin" ? "active" : ""}`} onClick={() => setPage("admin")}>
+          Admin
+        </button>
       </div>
 
-      {/* SECURITY PAGE */}
       {page === "security" && <Security />}
-
-      {/* ADMIN PAGE */}
       {page === "admin" && <Admin />}
 
-      {/* KIOSK PAGE */}
       {page === "kiosk" && (
-        <>
-          <h1>Visitor Check-In Kiosk</h1>
+        <div className="container">
+          <div className="pageTitleRow">
+            <div>
+              <h1 className="pageTitle">Visitor Check-In Kiosk</h1>
+              <p className="muted">Check in visitors and generate a QR token for verification.</p>
+            </div>
 
-          {loadingHosts ? (
-            <p>Loading hosts...</p>
-          ) : (
-            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 10 }}>
-              <input
-                placeholder="Full name *"
-                value={form.full_name}
-                onChange={(e) => updateField("full_name", e.target.value)}
-              />
-              <input
-                placeholder="Company"
-                value={form.company}
-                onChange={(e) => updateField("company", e.target.value)}
-              />
-              <input
-                placeholder="Phone"
-                value={form.phone}
-                onChange={(e) => updateField("phone", e.target.value)}
-              />
+            <button className="btn btnGhost" onClick={loadHosts}>
+              Reload Hosts
+            </button>
+          </div>
 
-              <select
-                value={form.host_id}
-                onChange={(e) => updateField("host_id", e.target.value)}
-              >
-                <option value="">Select host *</option>
-                {hosts.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.full_name} ({h.email})
-                  </option>
-                ))}
-              </select>
-
-              <input
-                placeholder="Purpose * (e.g., Meeting)"
-                value={form.purpose}
-                onChange={(e) => updateField("purpose", e.target.value)}
-              />
-
-              <button type="submit">Check In</button>
-            </form>
-          )}
-
-          {error && <p style={{ color: "red" }}>{error}</p>}
-
-          {/* ✅ QR CODE RESULT */}
-          {result?.qr_token && (
-            <div
-              style={{
-                marginTop: 20,
-                padding: 16,
-                border: "1px solid #ccc",
-                borderRadius: 10,
-                display: "grid",
-                gap: 12,
-                alignItems: "center",
-                maxWidth: 520,
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Check-in success ✅</h3>
-
-              <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
-                <div style={{ background: "white", padding: 10, borderRadius: 8 }}>
-                  <QRCodeCanvas value={result.qr_token} size={160} />
+          <div className="card">
+            {loadingHosts ? (
+              <p>Loading hosts...</p>
+            ) : (
+              <form onSubmit={handleSubmit} className="formGrid">
+                <div className="field">
+                  <label>Full name *</label>
+                  <input
+                    className="input"
+                    value={form.full_name}
+                    onChange={(e) => updateField("full_name", e.target.value)}
+                    placeholder="e.g., Sary Phillip"
+                  />
                 </div>
 
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>QR Token</div>
-                    <code style={{ wordBreak: "break-all" }}>{result.qr_token}</code>
+                <div className="field">
+                  <label>Company</label>
+                  <input
+                    className="input"
+                    value={form.company}
+                    onChange={(e) => updateField("company", e.target.value)}
+                    placeholder="e.g., APIU"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Phone</label>
+                  <input
+                    className="input"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    placeholder="e.g., 012345678"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Host *</label>
+                  <select
+                    className="input"
+                    value={form.host_id}
+                    onChange={(e) => updateField("host_id", e.target.value)}
+                  >
+                    <option value="">Select host</option>
+                    {hosts.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.full_name} ({h.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field" style={{ gridColumn: "1 / -1" }}>
+                  <label>Purpose *</label>
+                  <input
+                    className="input"
+                    value={form.purpose}
+                    onChange={(e) => updateField("purpose", e.target.value)}
+                    placeholder="e.g., Meeting"
+                  />
+                </div>
+
+                <button className="btn" type="submit" style={{ gridColumn: "1 / -1" }}>
+                  Check In
+                </button>
+              </form>
+            )}
+
+            {error && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{error}</p>}
+          </div>
+
+          {result?.qr_token && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <h2 style={{ margin: 0 }}>Check-in success ✅</h2>
+                <span className="muted">Security can verify this token later.</span>
+              </div>
+
+              <div className="row" style={{ gap: 20, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ background: "#fff", padding: 10, borderRadius: 12 }}>
+                  <QRCodeCanvas value={result.qr_token} size={180} />
+                </div>
+
+                <div style={{ minWidth: 280 }}>
+                  <div className="muted" style={{ marginBottom: 6 }}>QR Token</div>
+                  <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                    {result.qr_token}
                   </div>
 
-                  <button type="button" onClick={copyToken}>
+                  <button className="btn" style={{ marginTop: 12 }} onClick={copyToken}>
                     Copy Token
                   </button>
                 </div>
               </div>
-
-              <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>
-                Security can scan/read this QR token later to verify the visit.
-              </p>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

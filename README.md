@@ -84,5 +84,7 @@ The Visitor Check-In Kiosk System provides a practical and structured solution f
 Author
 
 Phillip
-Side-Quest Project
+
+Side-Quest Project 
+
 Asia-Pacific International University

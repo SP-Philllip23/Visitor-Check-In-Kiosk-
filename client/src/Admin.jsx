@@ -13,8 +13,10 @@ export default function Admin() {
 
   async function loadHosts() {
     setError("");
+    setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/hosts`);
+      // IMPORTANT: Admin must load ALL hosts
+      const res = await fetch(`${API_BASE}/hosts/all`);
       const data = await res.json();
       setHosts(data);
     } catch {
@@ -74,11 +76,30 @@ export default function Admin() {
     }
   }
 
+  async function enableHost(id) {
+    if (!confirm("Enable this host?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/hosts/${id}/enable`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Enable failed");
+
+      loadHosts();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
       <h1>Admin - Host Management</h1>
 
-      <form onSubmit={addHost} style={{ display: "grid", gap: 10, maxWidth: 420 }}>
+      <form
+        onSubmit={addHost}
+        style={{ display: "grid", gap: 10, maxWidth: 420 }}
+      >
         <input
           placeholder="Full name *"
           value={form.full_name}
@@ -96,10 +117,13 @@ export default function Admin() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      <h2>Active Hosts</h2>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>All Hosts</h2>
+        <button onClick={loadHosts}>Refresh</button>
+      </div>
 
       {loading && <p>Loading...</p>}
-      {!loading && hosts.length === 0 && <p>No active hosts.</p>}
+      {!loading && hosts.length === 0 && <p>No hosts yet.</p>}
 
       {hosts.length > 0 && (
         <table border="1" cellPadding="8" style={{ width: "100%", marginTop: 10 }}>
@@ -108,23 +132,35 @@ export default function Admin() {
               <th>ID</th>
               <th>Full Name</th>
               <th>Email</th>
+              <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
+
           <tbody>
             {hosts.map((h) => (
               <tr key={h.id}>
                 <td>{h.id}</td>
                 <td>{h.full_name}</td>
                 <td>{h.email}</td>
+                <td>{h.is_active === 1 ? "ACTIVE" : "DISABLED"}</td>
                 <td>
-                  <button onClick={() => disableHost(h.id)}>Disable</button>
+                  {h.is_active === 1 ? (
+                    <button onClick={() => disableHost(h.id)}>Disable</button>
+                  ) : (
+                    <button onClick={() => enableHost(h.id)}>Enable</button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+
+      <p style={{ marginTop: 12, opacity: 0.8 }}>
+        ✅ Disabled hosts will disappear from the Kiosk “Select host” dropdown (because Kiosk uses
+        <code> GET /hosts</code> = active only).
+      </p>
     </div>
   );
 }

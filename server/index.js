@@ -40,7 +40,7 @@ app.post("/hosts", (req, res) => {
 });
 
 // =====================
-// ADMIN: LIST HOSTS (ACTIVE ONLY)  ✅ used by Kiosk dropdown
+// ADMIN: LIST HOSTS (ACTIVE ONLY) ✅ used by Kiosk dropdown
 // =====================
 app.get("/hosts", (req, res) => {
   const rows = db
@@ -86,7 +86,7 @@ app.post("/hosts/:id/disable", (req, res) => {
 });
 
 // =====================
-// ADMIN: ENABLE HOST (optional but useful) ✅
+// ADMIN: ENABLE HOST ✅
 // =====================
 app.post("/hosts/:id/enable", (req, res) => {
   const id = Number(req.params.id);
@@ -247,10 +247,7 @@ app.get("/export/csv", (req, res) => {
     rows.map((r) => header.map((h) => escape(r[h])).join(",")).join("\n");
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader(
-    "Content-Disposition",
-    'attachment; filename="visitor_logs.csv"'
-  );
+  res.setHeader("Content-Disposition", 'attachment; filename="visitor_logs.csv"');
   res.send(csv);
 });
 

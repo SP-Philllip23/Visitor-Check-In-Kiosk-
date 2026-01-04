@@ -1,4 +1,22 @@
 # Visitor-Check-In-Kiosk-
+Visitor Check-In Kiosk System
+
+The Visitor Check-In Kiosk System is a full-stack web application developed to modernize and improve the traditional visitor registration process commonly used in offices, universities, and organizational environments. The system replaces manual sign-in logbooks with a centralized digital kiosk that records visitor information, generates QR-based visit identifiers, and enables secure verification and reporting.
+
+This project demonstrates practical application of full-stack development concepts, including frontend–backend integration, RESTful API design, database persistence, and user interface structuring for real-world operational roles.
+
+Project Purpose and Motivation
+
+Many organizations continue to rely on handwritten visitor logs, which are inefficient, difficult to audit, and prone to data loss or inaccuracies. Manual processes also limit real-time visibility for security personnel and make historical analysis cumbersome.
+
+The purpose of this project is to design and implement a structured visitor management system that improves operational efficiency, enhances security verification, and preserves accurate historical records. The system was designed with real-world constraints in mind, prioritizing usability, data integrity, and audit readiness.
+
+System Overview
+
+The application is divided into three primary interfaces: a visitor kiosk, a security dashboard, and an administrator panel. Each interface serves a specific role and communicates with a centralized backend API.
+
+Visitors interact with the kiosk interface to complete a self-service check-in process. Upon successful submission, the system generates a unique QR token representing the visit. Security personnel use the security dashboard to verify visitors, monitor active visits, and perform check-out operations. Administrators manage host availability through the admin panel without deleting records, ensuring that historical visit data remains consistent.
+
 Visitor Check-In Process
 
 When a visitor arrives, they complete a digital form that collects essential visit information, including personal details, host selection, and visit purpose. Once the check-in is completed, the system records the visit in the database and generates a unique QR code associated with that visit.

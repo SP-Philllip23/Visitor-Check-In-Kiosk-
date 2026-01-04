@@ -1,233 +1,68 @@
 # Visitor-Check-In-Kiosk-
-Visitor Check-In Kiosk System
+Visitor Check-In Process
 
-A full-stack Visitor Check-In Kiosk System designed for offices, universities, and organizations to manage visitor registration, security verification, and host administration in a simple and secure way.
+When a visitor arrives, they complete a digital form that collects essential visit information, including personal details, host selection, and visit purpose. Once the check-in is completed, the system records the visit in the database and generates a unique QR code associated with that visit.
 
-This project demonstrates frontend–backend integration, QR code–based verification, and real-world business features such as CSV export and role-based dashboards.
+This QR code serves as a secure visit identifier and can be displayed or copied for later verification. Hosts that have been disabled by administrators are automatically excluded from the kiosk interface, preventing invalid visit assignments.
 
-📌 Project Objectives
+Security Verification and Monitoring
 
-Allow visitors to check in easily using a kiosk interface
+The security dashboard provides real-time visibility into all active visits within the system. Security staff can verify visitors by entering a QR token manually or by uploading a QR image file, allowing verification even in environments where camera access is unavailable.
 
-Improve security by verifying visitors with QR codes
+Once verified, the dashboard displays detailed visit information, including visitor identity, host details, visit purpose, and timestamps. Security personnel can perform check-out actions directly from the interface. The system enforces strict visit state transitions to prevent duplicate or invalid check-outs and clearly distinguishes between active and completed visits.
 
-Enable administrators to manage hosts without deleting records
+The dashboard also supports exporting visit records in CSV format, enabling reporting, auditing, and administrative review.
 
-Provide security staff with real-time visitor monitoring and reports
+Host Administration
 
-🚀 Features
-🖥️ Kiosk (Visitor)
+The administrator panel allows authorized users to add and manage hosts. Instead of deleting hosts, the system supports enabling and disabling host accounts. Disabled hosts remain visible to administrators but are excluded from the visitor kiosk.
 
-Visitor check-in form:
+This design ensures that historical visit records remain intact and traceable, supporting accountability and preventing data inconsistencies caused by record deletion.
 
-Full name
+Technical Implementation
 
-Company
+The frontend of the application is built using React with Vite, providing a responsive and efficient user interface. The backend is implemented using Node.js and Express, exposing RESTful APIs to handle all system operations, including check-in, verification, administration, and reporting.
 
-Phone number
+SQLite is used as the database solution to store visitor, host, and visit records in a lightweight yet reliable manner. QR code generation and verification logic is integrated into the system workflow, and CSV export functionality is implemented on the backend with appropriate response handling to ensure compatibility with spreadsheet software.
 
-Host
+How to Run the Project
 
-Purpose of visit
+To start the backend server, navigate to the server directory, install dependencies, and run the server using Node.js. The backend service runs on port 3001 by default.
 
-Automatically generates a QR Code after check-in
+To start the frontend application, navigate to the client directory, install dependencies, and launch the development server using Vite. The frontend application runs on port 5173. Both services must be running simultaneously for the system to function correctly.
 
-QR token can be copied for later verification
+Challenges Faced During Development
 
-Disabled hosts do NOT appear in the kiosk dropdown
+Throughout development, several challenges were encountered that required iterative problem-solving and design refinement. One early challenge involved managing host records without compromising historical visit data. Initially, disabling a host removed them entirely from the system, which caused older visit records to lose their host references. This was resolved by introducing a host status mechanism that allows hosts to be enabled or disabled without deletion.
 
-🛡️ Security Dashboard
+Another challenge involved maintaining synchronization between frontend state and backend data. After performing administrative actions such as adding or disabling hosts, the user interface did not immediately reflect updated data. This issue was addressed by implementing consistent data reloading and state refresh logic after each operation.
 
-View all active visitors
+QR code verification also introduced complexity, particularly in handling visit states and ensuring that check-out operations were valid. Additional logic was implemented to prevent duplicate check-outs and to clearly distinguish between active and completed visits.
 
-Verify visits using QR token
+Camera-based QR scanning proved unreliable on some devices due to browser permissions and hardware limitations. To address this, an alternative QR verification method was implemented that allows security staff to upload QR image files, ensuring consistent functionality across devices.
 
-Paste QR token
+Finally, implementing CSV export functionality required careful handling of response headers and file streaming to ensure compatibility with spreadsheet applications such as Microsoft Excel.
 
-Upload QR image (PNG/JPG screenshot – no camera needed)
+Lessons Learned
 
-View detailed visit information:
+This project reinforced the importance of designing systems with real-world usage scenarios in mind. Managing data integrity without relying on deletion proved to be critical for maintaining accurate historical records. The experience also highlighted the value of separating concerns between frontend presentation and backend logic, resulting in a more maintainable and scalable system.
 
-Visitor name & company
+The project improved understanding of asynchronous operations, state management in frontend applications, and error handling across distributed system components. Additionally, implementing multiple verification methods demonstrated the importance of usability and accessibility when designing security-related features.
 
-Host name & email
+Overall, the development process strengthened practical skills in full-stack development, debugging, and system design, while emphasizing the need for thoughtful planning and iterative improvement.
 
-Purpose
+Future Improvements
 
-Check-in time
+While the system fulfills its intended objectives, several enhancements could be implemented in future iterations. Authentication and role-based access control could be added to restrict access to administrative and security features. Visitor photo capture and host notification mechanisms could further enhance security and communication.
 
-Check-out time
+The system could also be extended to support cloud-based databases, user analytics, and deployment to a production environment. Additional reporting features, such as daily or weekly visitor statistics, could provide deeper operational insights.
 
-Visit status (ACTIVE / CHECKED_OUT)
+Conclusion
 
-Check out visitors
+The Visitor Check-In Kiosk System provides a practical and structured solution for managing visitor workflows in organizational environments. The project demonstrates applied knowledge of full-stack web development, system architecture, and real-world problem solving. It is suitable for academic submission, portfolio presentation, and further development into a production-ready application.
 
-Export visit logs to CSV
+Author
 
-Opens correctly in Microsoft Excel / Google Sheets
-
-👨‍💼 Admin – Host Management
-
-Add new hosts
-
-Enable / Disable hosts
-
-Disabled hosts:
-
-Remain visible in Admin dashboard
-
-Are hidden from the Kiosk
-
-Prevents data loss and keeps visit history intact
-
-🧱 Technology Stack
-Frontend
-
-React (Vite)
-
-JavaScript (ES6)
-
-HTML / CSS
-
-Backend
-
-Node.js
-
-Express.js
-
-SQLite (better-sqlite3)
-
-Additional Tools
-
-QR Code generation
-
-QR Code verification (image upload)
-
-RESTful API
-
-CSV export
-
-📂 Project Structure
-Visitor-Check-In-Kiosk/
-│
-├── client/                 # Frontend (React)
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── Security.jsx
-│   │   ├── Admin.jsx
-│   │   └── api.js
-│   └── package.json
-│
-├── server/                 # Backend (Express)
-│   ├── db/
-│   │   └── visitor_kiosk.db
-│   ├── index.js
-│   └── package.json
-│
-└── README.md               # Project documentation
-
-▶️ How to Run the Project
-1️⃣ Start Backend Server
-
-Open terminal:
-
-cd server
-npm install
-node index.js
-
-
-Backend runs on:
-
-http://localhost:3001
-
-2️⃣ Start Frontend Client
-
-Open a new terminal:
-
-cd client
-npm install
-npm run dev
-
-
-Frontend runs on:
-
-http://localhost:5173
-
-🔁 Demo Workflow (For Presentation)
-
-Admin adds a host
-
-Visitor checks in at the Kiosk
-
-System generates a QR Code
-
-Security verifies the visit using:
-
-QR token OR
-
-Uploaded QR image
-
-Security checks out the visitor
-
-Security exports visit data as CSV
-
-📊 CSV Export Details
-
-CSV file includes:
-
-Visit ID
-
-Visitor name
-
-Company
-
-Phone number
-
-Host name & email
-
-Purpose
-
-Check-in time
-
-Check-out time
-
-QR token
-
-Fully compatible with Excel and Google Sheets
-
-Designed for reporting and audit purposes
-
-✅ Key Highlights (For Grading)
-
-Full CRUD functionality
-
-Clean frontend–backend separation
-
-Persistent data storage with SQLite
-
-QR-based security verification
-
-Business-ready reporting feature
-
-Role-based dashboards (Kiosk / Security / Admin)
-
-Real-world system design (no data deletion)
-
-⚠️ Notes
-
-QR scanning by camera may require HTTPS on some devices
-
-QR image upload works without camera permission
-
-Designed for educational and demonstration purposes
-
-👤 Author
-
-Sary Phillip
-Senior Project
+Phillip
+Final-Year Project
 Asia-Pacific International University
-Academic Year 2025–2026
-
-📌 License
-
-This project is for educational use only

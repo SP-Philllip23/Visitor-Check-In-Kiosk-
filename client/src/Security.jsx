@@ -1,16 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "./api";
+import QrScanner from "qr-scanner";
+
+// IMPORTANT for Vite: point to worker file
+QrScanner.WORKER_PATH = new URL(
+  "qr-scanner/qr-scanner-worker.min.js",
+  import.meta.url
+).toString();
 
 export default function Security() {
+  // ======================
+  // ACTIVE VISITS TABLE
+  // ======================
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // Verify QR Token UI
-  const [tokenInput, setTokenInput] = useState("");
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [verifyError, setVerifyError] = useState("");
-  const [verifyResult, setVerifyResult] = useState(null);
 
   async function loadActive() {
     setError("");
@@ -38,16 +42,18 @@ export default function Security() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");
-      await loadActive();
+      loadActive();
     } catch (e) {
       alert(e.message);
     }
   }
 
-  // ✅ FIXED: CSV download uses /export/csv (and backend also supports other aliases)
+  // ======================
+  // CSV DOWNLOAD
+  // ======================
   async function downloadCSV() {
     try {
-      const res = await fetch(`${API_BASE}/export/csv`);
+      const res = await fetch(`${API_BASE}/visits/export`);
       if (!res.ok) throw new Error("CSV export failed");
 
       const blob = await res.blob();
@@ -59,43 +65,107 @@ export default function Security() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+
       window.URL.revokeObjectURL(url);
     } catch (e) {
       alert(e.message || "CSV export failed");
     }
   }
 
-  async function verifyToken() {
-    setVerifyError("");
-    setVerifyResult(null);
+  // ======================
+  // VERIFY TOKEN (API)
+  // ======================
+  const [tokenInput, setTokenInput] = useState("");
+  const [verifyResult, setVerifyResult] = useState(null);
+  const [verifyError, setVerifyError] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
-    const t = tokenInput.trim();
-    if (!t) {
-      setVerifyError("Please paste a QR token first.");
+  async function verifyToken(token) {
+    const clean = (token || "").trim();
+    if (!clean) {
+      setVerifyError("Please paste a token first.");
+      setVerifyResult(null);
       return;
     }
 
-    setVerifyLoading(true);
+    setVerifying(true);
+    setVerifyError("");
+    setVerifyResult(null);
+
     try {
-      const res = await fetch(`${API_BASE}/visits/verify/${encodeURIComponent(t)}`);
+      const res = await fetch(`${API_BASE}/visits/verify/${encodeURIComponent(clean)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Verify failed");
+
+      if (!res.ok) throw new Error(data.error || "Token not found");
       setVerifyResult(data);
     } catch (e) {
       setVerifyError(e.message);
     } finally {
-      setVerifyLoading(false);
+      setVerifying(false);
     }
   }
 
   function clearVerify() {
     setTokenInput("");
-    setVerifyError("");
     setVerifyResult(null);
+    setVerifyError("");
   }
 
+  async function checkoutVerifiedVisit() {
+    if (!verifyResult?.visit_id) return;
+    if (verifyResult.status !== "ACTIVE") return;
+
+    if (!confirm("Check out this visit?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/visits/${verifyResult.visit_id}/checkout`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
+
+      // refresh both areas
+      await verifyToken(verifyResult.qr_token);
+      loadActive();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  // ======================
+  // UPLOAD QR IMAGE (NO CAMERA)
+  // ======================
+  const fileInputRef = useRef(null);
+
+  async function handleUploadImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setVerifyError("");
+    setVerifyResult(null);
+
+    try {
+      // scanImage can read File directly
+      const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true });
+      const scannedText = (result?.data || "").trim();
+
+      if (!scannedText) throw new Error("QR not detected. Try a clearer image.");
+
+      setTokenInput(scannedText);
+      await verifyToken(scannedText);
+    } catch (err) {
+      setVerifyError(err?.message || "Failed to read QR from image.");
+    } finally {
+      // allow uploading the same file again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // ======================
+  // UI
+  // ======================
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "Arial" }}>
+    <div style={{ maxWidth: 1100, margin: "40px auto", fontFamily: "Arial" }}>
       <h1>Security Dashboard</h1>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
@@ -103,117 +173,151 @@ export default function Security() {
         <button onClick={downloadCSV}>Download CSV</button>
       </div>
 
-      {/* VERIFY SECTION */}
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      {/* VERIFY QR TOKEN */}
       <div
         style={{
-          border: "1px solid #333",
-          borderRadius: 10,
+          marginTop: 18,
           padding: 16,
-          marginBottom: 20,
+          border: "1px solid #444",
+          borderRadius: 10,
         }}
       >
         <h2 style={{ marginTop: 0 }}>Verify QR Token</h2>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input
-            style={{ flex: 1 }}
+            style={{ flex: "1 1 420px", minWidth: 280 }}
             placeholder="Paste QR token here..."
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
           />
-          <button onClick={verifyToken} disabled={verifyLoading}>
-            {verifyLoading ? "Verifying..." : "Verify"}
+
+          <button onClick={() => verifyToken(tokenInput)} disabled={verifying}>
+            {verifying ? "Verifying..." : "Verify"}
           </button>
+
           <button onClick={clearVerify}>Clear</button>
+
+          {/* UPLOAD IMAGE BUTTON */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload a QR image (PNG/JPG) and auto-read it"
+          >
+            Upload QR Image
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleUploadImage}
+            style={{ display: "none" }}
+          />
         </div>
 
-        {verifyError && <p style={{ color: "red", marginTop: 10 }}>{verifyError}</p>}
+        {verifyError && <p style={{ color: "red", marginTop: 12 }}>{verifyError}</p>}
 
         {verifyResult && (
           <div
             style={{
               marginTop: 14,
               padding: 14,
-              border: "1px solid #444",
+              border: "1px solid #555",
               borderRadius: 10,
             }}
           >
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <strong>Result:</strong>
-              <span style={{ padding: "4px 10px", border: "1px solid #666", borderRadius: 999 }}>
-                Status: {verifyResult.status}
-              </span>
-              <span>Visit ID: {verifyResult.visit_id}</span>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div>
+                <b>Result:</b>{" "}
+                <span
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: "1px solid #666",
+                    marginLeft: 8,
+                  }}
+                >
+                  Status: {verifyResult.status}
+                </span>
+                <span style={{ marginLeft: 16 }}>
+                  <b>Visit ID:</b> {verifyResult.visit_id}
+                </span>
+              </div>
             </div>
 
-            <p style={{ marginTop: 10 }}>
-              <strong>Visitor:</strong> {verifyResult.visitor_name} ({verifyResult.company || "-"})
-            </p>
-            <p>
-              <strong>Phone:</strong> {verifyResult.phone || "-"}
-            </p>
-            <p>
-              <strong>Host:</strong> {verifyResult.host_name} ({verifyResult.host_email})
-            </p>
-            <p>
-              <strong>Purpose:</strong> {verifyResult.purpose}
-            </p>
-            <p>
-              <strong>Check-in:</strong> {verifyResult.check_in_at}
-            </p>
-            <p>
-              <strong>Check-out:</strong> {verifyResult.check_out_at || "-"}
-            </p>
+            <div style={{ marginTop: 12, lineHeight: 1.8 }}>
+              <div>
+                <b>Visitor:</b> {verifyResult.visitor_name}
+                {verifyResult.company ? ` (${verifyResult.company})` : ""}
+              </div>
+              <div>
+                <b>Phone:</b> {verifyResult.phone || "-"}
+              </div>
+              <div>
+                <b>Host:</b> {verifyResult.host_name} ({verifyResult.host_email})
+              </div>
+              <div>
+                <b>Purpose:</b> {verifyResult.purpose}
+              </div>
+              <div>
+                <b>Check-in:</b> {verifyResult.check_in_at}
+              </div>
+              <div>
+                <b>Check-out:</b> {verifyResult.check_out_at || "-"}
+              </div>
+              <div>
+                <b>Token:</b> <code>{verifyResult.qr_token}</code>
+              </div>
+            </div>
 
-            <p>
-              <strong>Token:</strong> {verifyResult.qr_token}
-            </p>
-
-            {!verifyResult.check_out_at ? (
-              <button onClick={() => checkout(verifyResult.visit_id)} style={{ marginTop: 10 }}>
-                Check Out This Visit
-              </button>
-            ) : (
-              <p style={{ marginTop: 10, opacity: 0.8 }}>Already checked out ✅</p>
-            )}
+            <div style={{ marginTop: 14 }}>
+              {verifyResult.status === "ACTIVE" ? (
+                <button onClick={checkoutVerifiedVisit}>Check Out This Visit</button>
+              ) : (
+                <span style={{ opacity: 0.8 }}>Already checked out ✅</span>
+              )}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ACTIVE VISITORS TABLE */}
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {/* ACTIVE VISITS TABLE */}
+      <div style={{ marginTop: 22 }}>
+        {!loading && rows.length === 0 && <p>No active visitors.</p>}
 
-      {!loading && rows.length === 0 && <p>No active visitors.</p>}
-
-      {rows.length > 0 && (
-        <table border="1" cellPadding="8" style={{ width: "100%" }}>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Visitor</th>
-              <th>Company</th>
-              <th>Purpose</th>
-              <th>Check-in</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.id}</td>
-                <td>{r.full_name}</td>
-                <td>{r.company || "-"}</td>
-                <td>{r.purpose}</td>
-                <td>{r.check_in_at}</td>
-                <td>
-                  <button onClick={() => checkout(r.id)}>Check Out</button>
-                </td>
+        {rows.length > 0 && (
+          <table border="1" cellPadding="8" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Visitor</th>
+                <th>Company</th>
+                <th>Purpose</th>
+                <th>Check-in</th>
+                <th>Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.id}</td>
+                  <td>{r.full_name}</td>
+                  <td>{r.company || "-"}</td>
+                  <td>{r.purpose}</td>
+                  <td>{r.check_in_at}</td>
+                  <td>
+                    <button onClick={() => checkout(r.id)}>Check Out</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

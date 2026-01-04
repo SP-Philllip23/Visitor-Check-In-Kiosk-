@@ -5,6 +5,7 @@ The Visitor Check-In Kiosk System is a full-stack web application developed to m
 
 This project demonstrates practical application of full-stack development concepts, including frontend–backend integration, RESTful API design, database persistence, and user interface structuring for real-world operational roles.
 
+# Project Purpose and Motivation 
 Project Purpose and Motivation
 
 Many organizations continue to rely on handwritten visitor logs, which are inefficient, difficult to audit, and prone to data loss or inaccuracies. Manual processes also limit real-time visibility for security personnel and make historical analysis cumbersome.
